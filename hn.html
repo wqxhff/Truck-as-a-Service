@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Сценарный анализ — Truck-as-a-Service</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+  color: #e2e8f0;
+  min-height: 100vh;
+  padding: 2rem 1rem;
+}
+.container { max-width: 1200px; margin: 0 auto; }
+header { text-align: center; margin-bottom: 2.5rem; }
+header h1 {
+  font-size: 2.2rem; font-weight: 800;
+  background: linear-gradient(135deg, #38bdf8, #818cf8, #c084fc);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  margin-bottom: 0.5rem;
+}
+.subtitle { color: #94a3b8; font-size: 1rem; }
+#kpi-cards {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem; margin-bottom: 2rem;
+}
+.kpi {
+  background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 12px; padding: 1.2rem; text-align: center;
+  backdrop-filter: blur(10px); transition: transform 0.2s;
+}
+.kpi:hover { transform: translateY(-3px); }
+.kpi .label { font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.4rem; }
+.kpi .value { font-size: 1.6rem; font-weight: 700; }
+.kpi .scenario { font-size: 0.7rem; color: #64748b; margin-top: 0.3rem; }
+.charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+.chart-card {
+  background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 16px; padding: 1.5rem;
+  backdrop-filter: blur(10px);
+}
+.chart-card.full-width { margin-bottom: 1.5rem; }
+.chart-card h2 {
+  font-size: 1rem; font-weight: 600; color: #cbd5e1;
+  margin-bottom: 1rem; padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+}
+table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+th, td { padding: 0.6rem 0.8rem; text-align: left; border-bottom: 1px solid rgba(148, 163, 184, 0.1); }
+th { color: #94a3b8; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
+td { color: #e2e8f0; }
+.tag {
+  display: inline-block; padding: 0.15rem 0.5rem; border-radius: 6px;
+  font-size: 0.75rem; font-weight: 600;
+}
+.tag-red { background: rgba(239,68,68,0.15); color: #f87171; }
+.tag-blue { background: rgba(56,189,248,0.15); color: #38bdf8; }
+.tag-green { background: rgba(34,197,94,0.15); color: #4ade80; }
+.roadmap-container { display: flex; flex-direction: column; gap: 0.8rem; }
+.roadmap-row { display: flex; align-items: center; gap: 1rem; }
+.roadmap-label { min-width: 260px; font-size: 0.82rem; color: #cbd5e1; }
+.roadmap-bar-track { flex: 1; height: 28px; background: rgba(148,163,184,0.08); border-radius: 8px; position: relative; }
+.roadmap-bar {
+  position: absolute; height: 100%; border-radius: 8px; top: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.7rem; font-weight: 600; color: #fff;
+}
+.compare-new { color: #4ade80; }
+.compare-old { color: #f87171; }
+@media (max-width: 768px) {
+  .charts-grid { grid-template-columns: 1fr; }
+  header h1 { font-size: 1.6rem; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>Сценарный анализ</h1>
+    <p class="subtitle">Модель Truck-as-a-Service — финансовые показатели и дорожная карта</p>
+  </header>
+
+  <!-- Section 1: KPI Cards -->
+  <div id="kpi-cards"></div>
+
+  <!-- Section 2: Main Charts Grid -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <h2>Экономия для клиента и EBITDA</h2>
+      <canvas id="barChart"></canvas>
+    </div>
+    <div class="chart-card">
+      <h2>Срок окупаемости и IRR</h2>
+      <canvas id="dualChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Section 3: Payback Timeline -->
+  <div class="chart-card full-width">
+    <h2>График окупаемости (три сценария)</h2>
+    <canvas id="paybackChart"></canvas>
+  </div>
+
+  <!-- Section 4: Target Segments -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <h2>Целевые сегменты</h2>
+      <canvas id="pieChart"></canvas>
+    </div>
+    <div class="chart-card">
+      <h2>Сводная таблица сценариев</h2>
+      <div id="scenarioTable"></div>
+    </div>
+  </div>
+
+  <!-- Section 5: Roadmap -->
+  <div class="chart-card full-width">
+    <h2>Roadmap реализации проекта (24 месяца)</h2>
+    <div id="roadmap"></div>
+  </div>
+
+  <!-- Section 6: Comparison Table -->
+  <div class="chart-card full-width">
+    <h2>Сравнительная таблица «Евроопт vs Новый подход»</h2>
+    <div id="comparisonTable"></div>
+  </div>
+</div>
+
+<script>
+const scenarios = [
+  { name: 'Пессимистичный', km: 40000, subsidy: 0, saving: 15000, ebitda: 50000, payback: 12.5, irr: 4.5, color: '#f87171', bg: 'rgba(248,113,113,0.15)' },
+  { name: 'Оптимальный', km: 60000, subsidy: 15, saving: 24520, ebitda: 91920, payback: 7.7, irr: 12.2, color: '#38bdf8', bg: 'rgba(56,189,248,0.15)' },
+  { name: 'Оптимистичный', km: 80000, subsidy: 25, saving: 35000, ebitda: 130000, payback: 5.2, irr: 18.5, color: '#4ade80', bg: 'rgba(74,222,128,0.15)' }
+];
+
+// KPI Cards
+const kpiContainer = document.getElementById('kpi-cards');
+const kpis = [
+  { label: 'Лучший IRR', value: '18.5%', scenario: 'Оптимистичный', col: '#4ade80' },
+  { label: 'Мин. окупаемость', value: '5.2 лет', scenario: 'Оптимистичный', col: '#4ade80' },
+  { label: 'Макс. EBITDA', value: '$130K', scenario: 'Оптимистичный', col: '#4ade80' },
+  { label: 'Базовый IRR', value: '12.2%', scenario: 'Оптимальный', col: '#38bdf8' },
+  { label: 'Базовая окупаемость', value: '7.7 лет', scenario: 'Оптимальный', col: '#38bdf8' },
+];
+kpis.forEach(k => {
+  kpiContainer.innerHTML += `<div class="kpi"><div class="label">${k.label}</div><div class="value" style="color:${k.col}">${k.value}</div><div class="scenario">${k.scenario}</div></div>`;
+});
+
+Chart.defaults.color = '#94a3b8';
+Chart.defaults.borderColor = 'rgba(148,163,184,0.1)';
+Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+
+// Bar Chart: Savings & EBITDA
+new Chart(document.getElementById('barChart'), {
+  type: 'bar',
+  data: {
+    labels: scenarios.map(s => s.name),
+    datasets: [
+      { label: 'Экономия клиента (USD)', data: scenarios.map(s => s.saving), backgroundColor: ['rgba(248,113,113,0.7)','rgba(56,189,248,0.7)','rgba(74,222,128,0.7)'], borderRadius: 6, barPercentage: 0.6 },
+      { label: 'EBITDA (USD/год)', data: scenarios.map(s => s.ebitda), backgroundColor: ['rgba(248,113,113,0.35)','rgba(56,189,248,0.35)','rgba(74,222,128,0.35)'], borderRadius: 6, barPercentage: 0.6 }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'bottom', labels: { padding: 15, usePointStyle: true, pointStyleWidth: 10 } } },
+    scales: { y: { beginAtZero: true, ticks: { callback: v => '$' + (v/1000) + 'K' }, grid: { color: 'rgba(148,163,184,0.06)' } }, x: { grid: { display: false } } }
+  }
+});
+
+// Dual Axis: Payback & IRR
+new Chart(document.getElementById('dualChart'), {
+  type: 'bar',
+  data: {
+    labels: scenarios.map(s => s.name),
+    datasets: [
+      { label: 'Срок окупаемости (лет)', data: scenarios.map(s => s.payback), backgroundColor: scenarios.map(s => s.bg), borderColor: scenarios.map(s => s.color), borderWidth: 2, borderRadius: 6, yAxisID: 'y', barPercentage: 0.5 },
+      { label: 'IRR (%)', data: scenarios.map(s => s.irr), type: 'line', borderColor: '#c084fc', backgroundColor: 'rgba(192,132,252,0.2)', pointBackgroundColor: '#c084fc', pointRadius: 6, pointHoverRadius: 8, tension: 0.3, fill: true, yAxisID: 'y1' }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'bottom', labels: { padding: 15, usePointStyle: true, pointStyleWidth: 10 } } },
+    scales: {
+      y: { beginAtZero: true, title: { display: true, text: 'Лет' }, grid: { color: 'rgba(148,163,184,0.06)' } },
+      y1: { position: 'right', beginAtZero: true, title: { display: true, text: 'IRR %' }, grid: { display: false } },
+      x: { grid: { display: false } }
+    }
+  }
+});
+
+// Payback Timeline
+const investment = 625000;
+new Chart(document.getElementById('paybackChart'), {
+  type: 'line',
+  data: {
+    labels: Array.from({length: 16}, (_, i) => `${i} г.`),
+    datasets: scenarios.map(s => ({
+      label: `${s.name} (${s.payback} лет)`,
+      data: Array.from({length: 16}, (_, i) => -investment + s.ebitda * i),
+      borderColor: s.color,
+      backgroundColor: s.bg,
+      pointRadius: 2, pointHoverRadius: 5,
+      tension: 0.1, fill: false, borderWidth: 2.5
+    }))
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { position: 'bottom', labels: { padding: 15, usePointStyle: true, pointStyleWidth: 10 } },
+      annotation: undefined
+    },
+    scales: {
+      y: { ticks: { callback: v => (v >= 0 ? '+' : '') + '$' + (v/1000).toFixed(0) + 'K' }, grid: { color: 'rgba(148,163,184,0.06)' } },
+      x: { grid: { color: 'rgba(148,163,184,0.04)' } }
+    }
+  }
+});
+
+// Pie Chart
+new Chart(document.getElementById('pieChart'), {
+  type: 'doughnut',
+  data: {
+    labels: ['B2G / Госпредприятия', 'Логистика', 'Агросектор', 'Строительство', 'Муниципалитеты'],
+    datasets: [{
+      data: [35, 25, 20, 12, 8],
+      backgroundColor: ['rgba(56,189,248,0.8)','rgba(74,222,128,0.8)','rgba(192,132,252,0.8)','rgba(251,191,36,0.8)','rgba(248,113,113,0.8)'],
+      borderColor: '#1e293b', borderWidth: 3, hoverOffset: 8
+    }]
+  },
+  options: {
+    responsive: true, cutout: '55%',
+    plugins: { legend: { position: 'bottom', labels: { padding: 12, usePointStyle: true, pointStyleWidth: 10, font: { size: 12 } } } }
+  }
+});
+
+// Scenario Table
+document.getElementById('scenarioTable').innerHTML = `<table>
+  <tr><th>Параметр</th>${scenarios.map(s => `<th style="color:${s.color}">${s.name}</th>`).join('')}</tr>
+  <tr><td>Годовой пробег</td>${scenarios.map(s => `<td>${(s.km/1000).toFixed(0)}K км</td>`).join('')}</tr>
+  <tr><td>Субсидии</td>${scenarios.map(s => `<td>${s.subsidy}%</td>`).join('')}</tr>
+  <tr><td>Экономия</td>${scenarios.map(s => `<td>$${(s.saving/1000).toFixed(1)}K</td>`).join('')}</tr>
+  <tr><td>EBITDA</td>${scenarios.map(s => `<td>$${(s.ebitda/1000).toFixed(1)}K</td>`).join('')}</tr>
+  <tr><td>Окупаемость</td>${scenarios.map(s => `<td>${s.payback} лет</td>`).join('')}</tr>
+  <tr><td>IRR</td>${scenarios.map(s => `<td>${s.irr}%</td>`).join('')}</tr>
+</table>`;
+
+// Roadmap
+const roadmapData = [
+  { label: 'Этап 1: Реализация со склада + пилоты', start: 0, end: 4, color: '#38bdf8' },
+  { label: 'Этап 2: B2G-проекты и тендеры', start: 4, end: 9, color: '#818cf8' },
+  { label: 'Этап 3: 5-8 продаж + экспорт', start: 9, end: 18, color: '#c084fc' },
+  { label: 'Этап 4: Масштабирование', start: 18, end: 24, color: '#4ade80' }
+];
+const rmContainer = document.getElementById('roadmap');
+rmContainer.innerHTML = '<div class="roadmap-container">' +
+  '<div class="roadmap-row"><div class="roadmap-label" style="font-weight:600;color:#64748b;font-size:0.7rem">ЭТАП</div><div class="roadmap-bar-track" style="background:transparent;display:flex;justify-content:space-between;height:auto"><span style="font-size:0.7rem;color:#64748b">0 мес.</span><span style="font-size:0.7rem;color:#64748b">6</span><span style="font-size:0.7rem;color:#64748b">12</span><span style="font-size:0.7rem;color:#64748b">18</span><span style="font-size:0.7rem;color:#64748b">24 мес.</span></div></div>' +
+  roadmapData.map(r => `<div class="roadmap-row"><div class="roadmap-label">${r.label}</div><div class="roadmap-bar-track"><div class="roadmap-bar" style="left:${(r.start/24)*100}%;width:${((r.end-r.start)/24)*100}%;background:linear-gradient(90deg,${r.color},${r.color}88)">${r.start}-${r.end} мес.</div></div></div>`).join('') +
+'</div>';
+
+// Comparison Table
+const compare = [
+  ['Целевой клиент', 'Частный средний бизнес', 'B2G, крупные госпредприятия'],
+  ['Модель продажи', 'Разовая продажа', 'Truck-as-a-Service'],
+  ['Цена', 'Высокая', 'Подписка / pay-per-use'],
+  ['Фин. инструменты', 'Отсутствуют', 'Лизинг + субсидии'],
+  ['Сервис', 'Ограниченный', 'Полный под ключ'],
+  ['Горизонт', 'Короткий', '5-10 лет'],
+  ['Риски', 'Высокие', 'Низкие'],
+];
+document.getElementById('comparisonTable').innerHTML = `<table>
+  <tr><th>Параметр</th><th>Евроопт (2023)</th><th>Новый подход</th></tr>
+  ${compare.map(r => `<tr><td>${r[0]}</td><td class="compare-old">${r[1]}</td><td class="compare-new">${r[2]}</td></tr>`).join('')}
+</table>`;
+</script>
+</body>
+</html>
